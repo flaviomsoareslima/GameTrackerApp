@@ -1,11 +1,7 @@
 require("dotenv").config()
 
-console.log({
-    host: process.env.DATABASE_HOST,
-    port: process.env.DATABASE_PORT,
-    user: process.env.DATABASE_USER,
-    database: process.env.DATABASE_NAME
-});
+const cors = require("cors");
+
 
 const express = require("express")
 const app = express()
@@ -27,6 +23,7 @@ const pool = mysql.createPool({
 //app.use(express.static(path.join(__dirname, "frontend")))
 
 app.use(express.json())
+app.use(cors());
 
 // codigo validar
 function validate(req, res, next) {
@@ -64,22 +61,213 @@ function validate(req, res, next) {
 
 }
 
-app.get("/api/titles", async (req, res) => {
-    const query = "SELECT title FROM games;"
-    const [games] = await pool.execute(query)
+app.get("/api/games", async (req, res, next) => {
+    try {
+        const requestedPage = Number(req.query.page || 1);
+        const page = Number.isInteger(requestedPage) && requestedPage > 0
+            ? requestedPage
+            : 1;
+        const limit = 10;
+        const offset = (page - 1) * limit;
 
-    return res.status(200).json(games)
-})
+        const [countResult] = await pool.execute(
+            "SELECT COUNT(*) AS total FROM games;"
+        );
+
+        const totalGames = countResult[0].total;
+        const totalPages = Math.ceil(totalGames / limit);
+
+        const [games] = await pool.execute(
+            `
+            SELECT
+                games.id,
+                games.title,
+                COALESCE(statuses.status_name, 'No status') AS status,
+                CASE
+                    WHEN COUNT(achievements.id) = 0 THEN 0
+                    ELSE ROUND(
+                        SUM(achievements.is_achievement_done) / COUNT(achievements.id) * 100
+                    )
+                END AS achievementProgress
+            FROM games
+            LEFT JOIN statuses
+                ON statuses.id = games.game_status_id
+            LEFT JOIN achievements
+                ON achievements.game_id = games.id
+            GROUP BY games.id, games.title, statuses.status_name
+            LIMIT ${limit} OFFSET ${offset};
+            `
+            
+        );
+
+        return res.status(200).json({
+            games,
+            totalPages
+        });
+    } catch (error) {
+        next(error);
+    }
+    
+
+    
+});
+
+// automatic search for searchbar displayed on the dropdown menu
+app.get("/api/search", async (req, res, next) => {
+    try {
+        const search = String(req.query.q || "").trim();
+
+        if (search.length < 2) {
+            return res.status(200).json({
+                titles: [],
+                developers: [],
+                publishers: []
+            });
+        }
+
+        const likeSearch = `%${search}%`;
+
+        
+        const [titles] = await pool.execute(
+            "SELECT id, title FROM games WHERE title LIKE ? LIMIT 5;",
+            [likeSearch]
+        );
+
+        const [developers] = await pool.execute(
+            "SELECT DISTINCT developer FROM games WHERE developer LIKE ? AND developer IS NOT NULL LIMIT 5;",
+            [likeSearch]
+        );
+
+        const [publishers] = await pool.execute(
+            "SELECT DISTINCT publisher FROM games WHERE publisher LIKE ? AND publisher IS NOT NULL LIMIT 5;",
+            [likeSearch]
+        );
+
+        return res.status(200).json({
+            titles,
+            developers,
+            publishers
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// bar search after pressing enter or clicking search button
+app.get("/api/games/search", async (req, res, next) => {
+    try {
+        const requestedPage = Number(req.query.page || 1);
+        const page = Number.isInteger(requestedPage) && requestedPage > 0
+            ? requestedPage
+            : 1;
+
+        const limit = 10;
+        const offset = (page - 1) * limit;
+        const search = String(req.query.q || "").trim();
+
+        const [countResult] = await pool.execute(
+            "SELECT COUNT(*) AS total FROM games WHERE title LIKE ?;",
+            [`%${search}%`]
+        );
+
+        const totalGames = countResult[0].total;
+        const totalPages = Math.ceil(totalGames / limit);
+        
+        
+        
+
+        if (search.length < 1) {
+            return res.status(200).json([]);
+        }
+
+        const [games] = await pool.execute(
+            `
+            SELECT
+                games.id,
+                games.title,
+                COALESCE(statuses.status_name, 'No status') AS status,
+                CASE
+                    WHEN  COUNT(achievements.id) = 0 THEN 0
+                    ELSE ROUND(
+                        SUM(achievements.is_achievement_done) / COUNT(achievements.id) * 100
+                    )
+                END AS achievementProgress
+            FROM games
+            LEFT JOIN statuses
+                ON statuses.id = games.game_status_id
+            LEFT JOIN achievements
+                ON achievements.game_id = games.id
+            WHERE games.title LIKE ?
+            GROUP BY games.id, games.title, statuses.status_name
+            LIMIT ${limit} OFFSET ${offset};
+            `,
+            [`%${search}%`]
+        );
+
+        return res.status(200).json({
+            games,
+            totalPages
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 
 // get favorites
 
-app.get("/api/titles/favorites", async (req, res) => {
+app.get("/api/games/favorites", async (req, res, next) => {
+    try {
+        const requestedPage = Number(req.query.page || 1);
+        const page = Number.isInteger(requestedPage) && requestedPage > 0
+            ? requestedPage
+            : 1;
+        const limit = 10;
+        const offset = (page - 1) * limit;
+
+        const [countResult] = await pool.execute(
+            "SELECT COUNT(*) AS total FROM games WHERE is_favorite = TRUE;"
+        );
+
+        const totalGames = countResult[0].total;
+        const totalPages = Math.ceil(totalGames / limit);
+        
+        
+        const [games] = await pool.execute(
+            `
+            SELECT
+                games.id,
+                games.title,
+                COALESCE(statuses.status_name, 'No status') AS status,
+                CASE
+                    WHEN COUNT(achievements.id) = 0 THEN 0
+                    ELSE ROUND(
+                        SUM(achievements.is_achievement_done) / COUNT(achievements.id) * 100
+                    )
+                END AS achievementProgress
+            FROM games
+            LEFT JOIN statuses
+                ON statuses.id = games.game_status_id
+            LEFT JOIN achievements
+                ON achievements.game_id = games.id
+            WHERE games.is_favorite = TRUE
+            GROUP BY games.id, games.title, statuses.status_name
+            LIMIT ${limit} OFFSET ${offset};
+            `
+            
+        );
+
+        return res.status(200).json({
+            games,
+            totalPages
+        });     
+        
+    } catch (error) {
+        next(error);
+    }
     
-    const query = "SELECT title FROM games WHERE is_favorite = TRUE;"
-    const [games] = await pool.execute(query)
     
-    return res.status(200).json(games)
-})
+});
 
 //get developer
 
