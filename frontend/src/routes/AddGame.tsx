@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 function AddGame() {
+    // every state value is connect to on input in the form
     const [title, setTitle] = useState("");
     const [developer, setDeveloper] = useState("");
     const [publisher, setPublisher] = useState("");
@@ -8,8 +9,11 @@ function AddGame() {
     const [rating, setRating] = useState("");
     const [notes, setNotes] = useState("");
 
+    // runs when the create game button is pressed
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        // Prevents the browser from refreshing the page
         event.preventDefault();
+
 
         const newGame = {
             title,
@@ -39,6 +43,8 @@ function AddGame() {
 
             console.log("Game created:", data);
 
+            // clears the form after the game object has been sent to the backend 
+            // and got a response from the backend
             setTitle("");
             setDeveloper("");
             setPublisher("");
@@ -52,10 +58,10 @@ function AddGame() {
         
 
 return (
-    <main className="p-8">
+    <main className="p-4 md:p-8">
         <form
             onSubmit={handleSubmit}
-            className="mx-auto flex max-w-xl flex-col gap-4 rounded-xl bg-[#29363F] p-6"
+            className="mx-auto flex w-full max-w-xl flex-col gap-4 rounded-xl bg-[#29363F] p-4 md:p-6"
         >
             <h2 className="text-2xl text-[#A1D9FF]">Add Game</h2>
 
@@ -123,7 +129,7 @@ return (
                     className="min-h-28 rounded-lg bg-[#101D25] px-4 py-2 outline-none"
                 />
             </label>
-
+            // triggers the onsubmit of the form
             <button
                 type="submit"
                 className="rounded-lg bg-[#A1D9FF] px-4 py-3 font-semibold text-[#101D25]"

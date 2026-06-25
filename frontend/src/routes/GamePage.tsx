@@ -55,7 +55,7 @@ function GamePage() {
     const [statuses, setStatuses] = useState<{ id: number; statusName: string }[]>([]);
 
 
-
+    // Saves the edited game info and selected categories to the backend.
     async function handleUpdateGame(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
@@ -101,6 +101,7 @@ function GamePage() {
         setIsEditingGame(false);
     }
 
+    // fetches everytime the route id changes
     useEffect(() => {
         async function fetchGame() {
             try {
@@ -132,6 +133,7 @@ function GamePage() {
             return;
         }
 
+        // timeout to have a delay on the fetch and avoid too many requests
         const timeoutId = setTimeout(async () => {
             try {
                 const response = await fetch(
@@ -154,7 +156,7 @@ function GamePage() {
         return () => clearTimeout(timeoutId);
     }, [categorySearch]);
 
-
+    //saves achievements, post for new achievements, and put for edited ones
     async function handleSaveAchievements() {
         if (!id) return;
 
@@ -218,6 +220,7 @@ function GamePage() {
             setError("Failed to save achievements.");
         }
     }
+    
     async function handleDeleteGame() {
         const confirmed = window.confirm("Are you sure you want to delete this game?");
 
@@ -326,7 +329,7 @@ function GamePage() {
         }
     }
 
-    
+
 
     function addCategory(category: Category) {
         const alreadySelected = editCategories.some(
@@ -366,7 +369,7 @@ function GamePage() {
         <main className="p-8 text-[#A1D9FF]">
             <section className="mx-auto flex max-w-4xl flex-col gap-6">
                 <div className="rounded-xl bg-[#29363F] p-6">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div>
                             <h2 className="text-3xl font-semibold">{game.title}</h2>
                             <p className="mt-2 text-gray-300">{game.status}</p>
@@ -516,7 +519,7 @@ function GamePage() {
                                 />
                             </label>
 
-                            <div className="flex gap-3">
+                            <div className="flex flex-col gap-3 sm:flex-row">
 
                                 <button
                                     type="submit"
@@ -535,7 +538,7 @@ function GamePage() {
                             </div>
                         </form>
                     ) : (
-                        <div className="mt-6 grid grid-cols-2 gap-4">
+                        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <p>Developer: {game.developer}</p>
                             <p>Publisher: {game.publisher}</p>
                             <p>
@@ -575,24 +578,23 @@ function GamePage() {
                             {achievements.map((achievement) => (
                                 <div
                                     key={achievement.id ?? `new-${achievement.achievementNumber}`}
-                                    className="flex items-center gap-3 rounded-lg bg-[#101D25] px-4 py-3"
+                                    className="flex flex-col gap-3 rounded-lg bg-[#101D25] px-4 py-3 md:flex-row md:items-start"
                                 >
-                                    <input
-                                        type="number"
-                                        value={achievement.achievementNumber}
+                                    <textarea
+                                        value={achievement.achievementText}
                                         onChange={(event) => {
                                             setAchievements((current) =>
                                                 current.map((item) =>
                                                     item === achievement
                                                         ? {
                                                             ...item,
-                                                            achievementNumber: Number(event.target.value),
+                                                            achievementText: event.target.value,
                                                         }
                                                         : item
                                                 )
                                             );
                                         }}
-                                        className="w-20 rounded-lg bg-[#29363F] px-3 py-2 outline-none"
+                                        className="min-h-24 flex-1 rounded-lg bg-[#29363F] px-3 py-2 outline-none"
                                     />
                                     <input
                                         type="checkbox"
@@ -612,23 +614,7 @@ function GamePage() {
                                     />
 
 
-                                    <input
-                                        type="text"
-                                        value={achievement.achievementText}
-                                        onChange={(event) => {
-                                            setAchievements((current) =>
-                                                current.map((item) =>
-                                                    item === achievement
-                                                        ? {
-                                                            ...item,
-                                                            achievementText: event.target.value,
-                                                        }
-                                                        : item
-                                                )
-                                            );
-                                        }}
-                                        className="flex-1 rounded-lg bg-[#29363F] px-3 py-2 outline-none"
-                                    />
+                                    
 
                                     <button
                                         type="button"
@@ -683,16 +669,18 @@ function GamePage() {
                                 {achievements.map((achievement) => (
                                     <div
                                         key={achievement.id}
-                                        className="flex items-center justify-between rounded-lg bg-[#101D25] px-4 py-3"
+                                        className="flex flex-col gap-3 rounded-lg bg-[#101D25] px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
                                     >
-                                        <div>
-                                            <p>
-                                                #{achievement.achievementNumber}{" "}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="wrap-break-words leading-relaxed">
+                                                <span className="font-semibold">
+                                                    #{achievement.achievementNumber}
+                                                </span>{" "}
                                                 {achievement.achievementText}
                                             </p>
                                         </div>
 
-                                        <span>
+                                        <span className="shrink-0 self-start rounded-lg bg-[#29363F] px-3 py-1 text-sm">
                                             {achievement.isAchievementDone ? "Done" : "Not done"}
                                         </span>
                                     </div>
@@ -702,42 +690,44 @@ function GamePage() {
                     )}
 
                 </div>
+
+                <div className="flex flex-col md:flex-row md:justify-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setEditTitle(game.title);
+                            setEditDeveloper(game.developer || "");
+                            setEditPublisher(game.publisher || "");
+                            setEditLaunchYear(String(game.launchYear || ""));
+                            setEditRating(game.rating ? String(game.rating) : "");
+                            setEditNotes(game.notes || "");
+                            setEditCategories(game.categories || []);
+                            setEditStatusId(game.statusId ? String(game.statusId) : "");
+                            setIsEditingGame(true);
+                        }}
+                        className="rounded-lg bg-[#A1D9FF] px-4 py-2 font-semibold text-[#101D25]"
+                    >
+                        Edit Game
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsEditingAchievements(true)}
+                        className="rounded-lg bg-[#A1D9FF] px-4 py-2 font-semibold text-[#101D25]"
+                    >
+                        Edit Achievements
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={handleDeleteGame}
+                        className="rounded-lg bg-red-500 px-4 py-2 font-semibold text-white"
+                    >
+                        Delete Game
+                    </button>
+
+                </div>
             </section>
-            <div className="flex gap-3">
-                <button
-                    type="button"
-                    onClick={() => {
-                        setEditTitle(game.title);
-                        setEditDeveloper(game.developer || "");
-                        setEditPublisher(game.publisher || "");
-                        setEditLaunchYear(String(game.launchYear || ""));
-                        setEditRating(game.rating ? String(game.rating) : "");
-                        setEditNotes(game.notes || "");
-                        setEditCategories(game.categories || []);
-                        setEditStatusId(game.statusId ? String(game.statusId) : "");
-                        setIsEditingGame(true);
-                    }}
-                    className="rounded-lg bg-[#A1D9FF] px-4 py-2 font-semibold text-[#101D25]"
-                >
-                    Edit Game
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setIsEditingAchievements(true)}
-                    className="rounded-lg bg-[#A1D9FF] px-4 py-2 font-semibold text-[#101D25]"
-                >
-                    Edit Achievements
-                </button>
-
-                <button
-                    type="button"
-                    onClick={handleDeleteGame}
-                    className="rounded-lg bg-red-500 px-4 py-2 font-semibold text-white"
-                >
-                    Delete Game
-                </button>
-            </div>
         </main>
     );
 }

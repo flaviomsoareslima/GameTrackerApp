@@ -438,6 +438,8 @@ app.get("/api/games/search", async (req, res, next) => {
     }
 });
 
+
+// get games by id for the game page
 app.get("/api/games/:id", async (req, res, next) => {
     try {
         const gameId = Number(req.params.id);
@@ -532,23 +534,21 @@ app.get("/api/games/:id", async (req, res, next) => {
     }
 });
 
+
+// used by the category autocomplete inputs. Returns matching existing categories.
 app.get("/api/categories/search", async (req, res, next) => {
     try {
         const search = String(req.query.q || "").trim();
-
-        if (search.length < 1) {
-            return res.status(200).json([]);
-        }
 
         const [categories] = await pool.execute(
             `
             SELECT id, category
             FROM categories
-            WHERE category LIKE ?
+            WHERE ? = '' OR category LIKE ?
             ORDER BY category
             LIMIT 10;
             `,
-            [`%${search}%`]
+            [search, `%${search}%`]
         );
 
         return res.status(200).json(categories);
@@ -731,26 +731,6 @@ app.put("/api/games/:id", validate, async (req, res, next) => {
 });
 
 
-app.get("/api/categories/search", async (req, res, next) => {
-    try {
-        const search = String(req.query.q || "").trim();
-
-        const [categories] = await pool.execute(
-            `
-            SELECT id, category
-            FROM categories
-            WHERE ? = '' OR category LIKE ?
-            ORDER BY category
-            LIMIT 10;
-            `,
-            [search, `%${search}%`]
-        );
-
-        return res.status(200).json(categories);
-    } catch (error) {
-        next(error);
-    }
-});
 
 // post to add achievements
 app.post("/api/games/:id/achievements", async (req, res, next) => {

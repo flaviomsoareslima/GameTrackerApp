@@ -14,10 +14,10 @@ function Card({ id, status, title, achievementProgress }: CardProps) {
     return (
         <Link
             to={`/game/${id}`}
-            className="flex flex-col gap-2 bg-[#29363F] w-80 p-4 rounded-xl hover:bg-[#344650]">
+            className="flex w-full flex-col gap-2 rounded-xl bg-[#29363F] p-4 hover:bg-[#344650]">
             <h3 className="text-[#A1D9FF]">{status}</h3>
-            <h2 className="text-[#A1D9FF]">{title}</h2>
-            <div className="flex flex-row justify-between">
+            <h2 className="wrap-break-words text-[#A1D9FF]">{title}</h2>
+            <div className="flex flex-col md:flex-row justify-between">
                 <p className="text-[#A1D9FF]">Progress</p>
                 <p className="text-[#A1D9FF]">{achievementProgress}%</p>
             </div>
@@ -170,7 +170,7 @@ function GamesCard() {
                 {isFilterOpen && (
                     <form
                         onSubmit={handleFilterSubmit}
-                        className="mt-4 grid grid-cols-6 gap-4"
+                        className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
                     >
                         <input name="title" defaultValue={title} placeholder="Title" className="rounded-lg bg-[#101D25] px-3 py-2 outline-none" />
                         <input name="developer" defaultValue={developer} placeholder="Developer" className="rounded-lg bg-[#101D25] px-3 py-2 outline-none" />
@@ -272,7 +272,7 @@ function GamesCard() {
                 )}
             </div>
 
-            <section className="grid grid-cols-4 gap-4">
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {games.map((game) => (
                     <Card
                         key={game.id}
@@ -282,7 +282,7 @@ function GamesCard() {
                         achievementProgress={game.achievementProgress}
                     />
                 ))}
-                <div className="col-span-4 flex justify-center gap-2">
+                <div className="col-span-full flex flex-wrap justify-center gap-2">
                     {Array.from({ length: totalPages }, (_, index) => {
                         const pageNumber = index + 1;
 

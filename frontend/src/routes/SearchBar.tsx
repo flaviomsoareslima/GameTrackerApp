@@ -1,15 +1,21 @@
 import { useState, useRef, useEffect } from "react";
+//just an icon for the search button
 import { Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 
 function SearchBar() {
+    // Stores what the user typed in the search input
     const [query, setQuery] = useState("");
+    // Toggle for the dropdown menu
     const [isOpen, setIsOpen] = useState(false);
+    // Reference to the whole search bar area, let it detect clicks outside the search bar
+    // used to close the dropdown menu when clicked outside
     const dropdownRef = useRef<HTMLDivElement>(null);
+    // Changes the URL when the user searches
     const navigate = useNavigate();
 
-
+    //search results when user presses Enter or clicks the search icon
     const handleSearch = () => {
         const trimmedQuery = query.trim();
 
@@ -22,7 +28,7 @@ function SearchBar() {
     };
 
     
-
+    // closes the dropdowm if it detects clicks outside the search bar
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (
@@ -33,13 +39,16 @@ function SearchBar() {
             }
         }
 
+        // mouse click listener
         document.addEventListener("mousedown", handleClickOutside);
 
+        // removes the listener when the component is closed
         return () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, []);
 
+    // searches results for the dropdown menu and has a debounce(delay in the requests)
     useEffect(() => {
         const trimmedQuery = query.trim();
 
@@ -60,6 +69,7 @@ function SearchBar() {
 
                 const data = await response.json();
 
+                //gives empty arrays if backend responds with missing fields
                 setResults({
                     titles: data.titles || [],
                     developers: data.developers || [],
@@ -70,15 +80,19 @@ function SearchBar() {
                 console.error("Search failed: ", error);
             }
         }, 500);
+
+        // restarts timer everytime the query changes
         return () => clearTimeout(timeoutId);
     }, [query]);
 
+    // defines the types for the search results in the dropdown menu
     type SearchResults = {
         titles: { id: number; title: string }[];
         developers: { developer: string }[];
         publishers: { publisher: string }[];
     }
 
+    // stores the results from the backend
     const [results, setResults] = useState<SearchResults>({
         titles: [],
         developers: [],
@@ -87,7 +101,7 @@ function SearchBar() {
 
     
     
-
+    // shows search bar and the dropdown menu
     return (
         <div ref={dropdownRef} className="relative flex w-full items-center">
             <input
@@ -118,7 +132,7 @@ function SearchBar() {
             >
                 <Search size={20} />
             </button>
-
+            {/* shows dropdown menu if isOpen is true */}
             {isOpen && (
                 <div className="absolute top-full mt-2 w-full bg-[#29363F] rounded-xl shadow-lg overflow-hidden z-50">
 
@@ -127,7 +141,7 @@ function SearchBar() {
                         <h3 className="px-4 py-2 text-xs uppercase text-gray-400">
                             Titles
                         </h3>
-
+                        {/* shows all results and make them links to queries */}
                         {results.titles.map((game) => (
                             <Link
                                 key={game.title}
