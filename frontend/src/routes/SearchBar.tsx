@@ -111,8 +111,8 @@ function SearchBar() {
             <button
                 type="button"
                 onClick={() => {
-                    
-                    setIsOpen(false), handleSearch;
+                    setIsOpen(false),
+                    handleSearch();
                 }}
                 className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-[#A1D9FF]"
             >
@@ -148,7 +148,8 @@ function SearchBar() {
                         {results.developers.map((item) => (
                             <Link
                                 key={item.developer}
-                                to={`/developer/${encodeURIComponent(item.developer)}`}
+                                to={`/?filter=custom&developer=${encodeURIComponent(item.developer)}&page=1`}
+                                onClick={() => setIsOpen(false)}
                                 className="block px-4 py-2 text-[#A1D9FF] hover:bg-[#3A4A55]"
                             >
                                 {item.developer}
@@ -163,7 +164,8 @@ function SearchBar() {
                         {results.publishers.map((item) => (
                             <Link
                                 key={item.publisher}
-                                to={`/publisher/${encodeURIComponent(item.publisher)}`}
+                                to={`/?filter=custom&publisher=${encodeURIComponent(item.publisher)}&page=1`}
+                                onClick={() => setIsOpen(false)}
                                 className="block px-4 py-2 text-[#A1D9FF] hover:bg-[#3A4A55]"
                             >
                                 {item.publisher}

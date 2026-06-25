@@ -10,9 +10,12 @@ function Navbar() {
     <>
       <nav className="bg-[#101D25]">
         <div className="flex w-full items-center gap-8 px-8 py-4">
-          <h1 className="shrink-0 text-2xl leading-none text-[#A1D9FF]">
+          <Link
+            to="/"
+            className="shrink-0 text-2xl leading-none text-[#A1D9FF]"
+          >
             GameTracker
-          </h1>
+          </Link>
 
           <div className="min-w-64 flex-1">
             <SearchBar />

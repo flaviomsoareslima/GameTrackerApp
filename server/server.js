@@ -27,35 +27,51 @@ app.use(cors());
 
 // codigo validar
 function validate(req, res, next) {
-    const {title, developer, publisher, launchYear} = req.body
+    const { title, developer, publisher, launchYear, rating, notes, statusId, categories } = req.body
 
-    const validTitle = String(title).trim()
-    const validDeveloper = String(developer).trim()
-    const validPublisher = String(publisher).trim()
-    const validLaunchYear = Number(launchYear)
+    const validTitle = String(title || "").trim();
+    const validDeveloper = String(developer || "").trim();
+    const validPublisher = String(publisher || "").trim();
+    const validLaunchYear = Number(launchYear);
     const currentYear = new Date().getFullYear()
+    const validRating = rating === null || rating === undefined || rating === "" ? null : Number(rating);
+    const validNotes = String(notes || "").trim();
+    const validStatusId = statusId === null || statusId === undefined || statusId === ""
+        ? null
+        : Number(statusId);
 
     if (validTitle.length < 1 || validTitle.length > 255) {
-        return res.status(400).json({ error: "Title is required (between 1 and 255 characters"})
+        return res.status(400).json({ error: "Title is required (between 1 and 255 characters" })
     }
 
     if (validDeveloper.length < 1 || validDeveloper.length > 255) {
-        return res.status(400).json({ error: "Developer must have between 1 and 255 characters"})
+        return res.status(400).json({ error: "Developer must have between 1 and 255 characters" })
     }
 
     if (validPublisher.length < 1 || validPublisher.length > 255) {
-        return res.status(400).json({ error: "Publisher name must have between between 1 and 255 characters"})
+        return res.status(400).json({ error: "Publisher name must have between between 1 and 255 characters" })
     }
 
-    if(validLaunchYear < 1900 || validLaunchYear > currentYear) {
-        return res.status(400).json({ error: "Launch year must be between 1900 and current year"})
+    if (!Number.isInteger(validLaunchYear) || validLaunchYear < 1950 || validLaunchYear > currentYear) {
+        return res.status(400).json({ error: "Launch year must be between 1900 and current year" })
+    }
+
+    if (validRating !== null && (!Number.isFinite(validRating) || validRating < 1 || validRating > 10)) {
+        return res.status(400).json({ error: "Rating must be between 1 and 10." })
+    };
+    if (validStatusId !== null && (!Number.isInteger(validStatusId) || validStatusId < 1)) {
+        return res.status(400).json({ error: "Invalid status." })
     }
 
     req.body = {
         title: validTitle,
         developer: validDeveloper,
         publisher: validPublisher,
-        launchYear: validLaunchYear
+        launchYear: validLaunchYear,
+        rating: validRating,
+        notes: validNotes,
+        statusId: validStatusId,
+        categories: Array.isArray(categories) ? categories : []
     }
     next()
 
@@ -95,9 +111,10 @@ app.get("/api/games", async (req, res, next) => {
             LEFT JOIN achievements
                 ON achievements.game_id = games.id
             GROUP BY games.id, games.title, statuses.status_name
+            ORDER BY games.title ASC
             LIMIT ${limit} OFFSET ${offset};
             `
-            
+
         );
 
         return res.status(200).json({
@@ -107,10 +124,218 @@ app.get("/api/games", async (req, res, next) => {
     } catch (error) {
         next(error);
     }
-    
 
-    
+
+
 });
+
+// detailed search
+
+app.get("/api/games/filter", async (req, res, next) => {
+    try {
+        const requestedPage = Number(req.query.page || 1);
+        const page = Number.isInteger(requestedPage) && requestedPage > 0
+            ? requestedPage
+            : 1;
+
+        const limit = 10;
+        const offset = (page - 1) * limit;
+
+        const {
+            title,
+            developer,
+            publisher,
+            status,
+            category,
+            ratingOrder,
+            launchYearOrder,
+            titleOrder,
+            developerOrder,
+            publisherOrder
+        } = req.query;
+
+        const where = [];
+        const values = [];
+        const orderBy = [];
+
+        if (title) {
+            where.push("games.title LIKE ?");
+            values.push(`%${title}%`);
+        }
+
+        if (developer) {
+            where.push("games.developer LIKE ?");
+            values.push(`%${developer}%`);
+        }
+
+        if (publisher) {
+            where.push("games.publisher LIKE ?");
+            values.push(`%${publisher}%`);
+        }
+
+        if (titleOrder === "asc") {
+            orderBy.push("games.title ASC");
+        } else if (titleOrder === "desc") {
+            orderBy.push("games.title DESC");
+        }
+
+        if (developerOrder === "asc") {
+            orderBy.push("games.developer ASC");
+        } else if (developerOrder === "desc") {
+            orderBy.push("games.developer DESC");
+        }
+
+        if (publisherOrder === "asc") {
+            orderBy.push("games.publisher ASC");
+        } else if (publisherOrder === "desc") {
+            orderBy.push("games.publisher DESC");
+        }
+
+        if (status) {
+            where.push("statuses.status_name LIKE ?");
+            values.push(`%${status}%`);
+        }
+
+        if (category) {
+            where.push("categories.category LIKE ?");
+            values.push(`%${category}%`);
+        }
+
+        if (ratingOrder === "asc") {
+            orderBy.push("games.rating ASC");
+        } else if (ratingOrder === "desc") {
+            orderBy.push("games.rating DESC");
+        }
+
+        if (launchYearOrder === "asc") {
+            orderBy.push("games.launch_year ASC");
+        } else if (launchYearOrder === "desc") {
+            orderBy.push("games.launch_year DESC");
+        }
+
+        const orderSql = orderBy.length > 0
+            ? `ORDER BY ${orderBy.join(", ")}`
+            : "ORDER BY games.title ASC";
+
+        const whereSql = where.length > 0
+            ? `WHERE ${where.join(" AND ")}`
+            : "";
+
+        const [countResult] = await pool.execute(
+            `
+            SELECT COUNT(DISTINCT games.id) AS total
+            FROM games
+            LEFT JOIN statuses
+                ON statuses.id = games.game_status_id
+            LEFT JOIN game_categories
+                ON game_categories.game_id = games.id
+            LEFT JOIN categories
+                ON categories.id = game_categories.category_id
+            ${whereSql};
+            `,
+            values
+        );
+
+        const totalGames = countResult[0].total;
+        const totalPages = Math.ceil(totalGames / limit);
+
+        const [games] = await pool.execute(
+            `
+            SELECT
+                games.id,
+                games.title,
+                COALESCE(statuses.status_name, 'No status') AS status,
+                CASE
+                    WHEN COUNT(achievements.id) = 0 THEN 0
+                    ELSE ROUND(
+                        SUM(achievements.is_achievement_done) / COUNT(achievements.id) * 100
+                    )
+                END AS achievementProgress
+            FROM games
+            LEFT JOIN statuses
+                ON statuses.id = games.game_status_id
+            LEFT JOIN achievements
+                ON achievements.game_id = games.id
+            LEFT JOIN game_categories
+                ON game_categories.game_id = games.id
+            LEFT JOIN categories
+                ON categories.id = game_categories.category_id
+            ${whereSql}
+            GROUP BY games.id, games.title, statuses.status_name
+            ${orderSql}
+            LIMIT ${limit} OFFSET ${offset};
+            `,
+            values
+        );
+
+        return res.status(200).json({
+            games,
+            totalPages
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// get favorites
+
+app.get("/api/games/favorites", async (req, res, next) => {
+    try {
+        const requestedPage = Number(req.query.page || 1);
+        const page = Number.isInteger(requestedPage) && requestedPage > 0
+            ? requestedPage
+            : 1;
+        const limit = 10;
+        const offset = (page - 1) * limit;
+
+        const [countResult] = await pool.execute(
+            "SELECT COUNT(*) AS total FROM games WHERE is_favorite = TRUE;"
+        );
+
+        const totalGames = countResult[0].total;
+        const totalPages = Math.ceil(totalGames / limit);
+
+
+        const [games] = await pool.execute(
+            `
+            SELECT
+                games.id,
+                games.title,
+                COALESCE(statuses.status_name, 'No status') AS status,
+                CASE
+                    WHEN COUNT(achievements.id) = 0 THEN 0
+                    ELSE ROUND(
+                        SUM(achievements.is_achievement_done) / COUNT(achievements.id) * 100
+                    )
+                END AS achievementProgress
+            FROM games
+            LEFT JOIN statuses
+                ON statuses.id = games.game_status_id
+            LEFT JOIN achievements
+                ON achievements.game_id = games.id
+            WHERE games.is_favorite = TRUE
+            GROUP BY games.id, games.title, statuses.status_name
+            ORDER BY games.title ASC
+            LIMIT ${limit} OFFSET ${offset};
+            `
+
+        );
+
+        return res.status(200).json({
+            games,
+            totalPages
+        });
+
+    } catch (error) {
+        next(error);
+    }
+
+
+});
+
+
+
+
 
 // automatic search for searchbar displayed on the dropdown menu
 app.get("/api/search", async (req, res, next) => {
@@ -127,7 +352,7 @@ app.get("/api/search", async (req, res, next) => {
 
         const likeSearch = `%${search}%`;
 
-        
+
         const [titles] = await pool.execute(
             "SELECT id, title FROM games WHERE title LIKE ? LIMIT 5;",
             [likeSearch]
@@ -172,9 +397,9 @@ app.get("/api/games/search", async (req, res, next) => {
 
         const totalGames = countResult[0].total;
         const totalPages = Math.ceil(totalGames / limit);
-        
-        
-        
+
+
+
 
         if (search.length < 1) {
             return res.status(200).json([]);
@@ -213,31 +438,30 @@ app.get("/api/games/search", async (req, res, next) => {
     }
 });
 
-
-// get favorites
-
-app.get("/api/games/favorites", async (req, res, next) => {
+app.get("/api/games/:id", async (req, res, next) => {
     try {
-        const requestedPage = Number(req.query.page || 1);
-        const page = Number.isInteger(requestedPage) && requestedPage > 0
-            ? requestedPage
-            : 1;
-        const limit = 10;
-        const offset = (page - 1) * limit;
+        const gameId = Number(req.params.id);
 
-        const [countResult] = await pool.execute(
-            "SELECT COUNT(*) AS total FROM games WHERE is_favorite = TRUE;"
+        if (!Number.isInteger(gameId) || gameId < 1) {
+            return res.status(400).json({ error: "This game doesn't exist." });
+        }
+
+        const [statuses] = await pool.execute(
+            "SELECT id, status_name AS statusName FROM statuses ORDER BY status_name;"
         );
 
-        const totalGames = countResult[0].total;
-        const totalPages = Math.ceil(totalGames / limit);
-        
-        
         const [games] = await pool.execute(
             `
             SELECT
                 games.id,
                 games.title,
+                games.developer,
+                games.publisher,
+                games.is_favorite AS isFavorite,
+                games.rating,
+                games.notes,
+                games.launch_year AS launchYear,
+                games.game_status_id AS statusId,
                 COALESCE(statuses.status_name, 'No status') AS status,
                 CASE
                     WHEN COUNT(achievements.id) = 0 THEN 0
@@ -250,141 +474,448 @@ app.get("/api/games/favorites", async (req, res, next) => {
                 ON statuses.id = games.game_status_id
             LEFT JOIN achievements
                 ON achievements.game_id = games.id
-            WHERE games.is_favorite = TRUE
-            GROUP BY games.id, games.title, statuses.status_name
-            LIMIT ${limit} OFFSET ${offset};
+            WHERE games.id = ?
+            GROUP BY
+                games.id,
+                games.title,
+                games.developer,
+                games.publisher,
+                games.is_favorite,
+                games.rating,
+                games.notes,
+                games.launch_year,
+                games.game_status_id,
+                statuses.status_name;
+            `,
+            [gameId]
+        );
+
+        if (games.length === 0) {
+            return res.status(404).json({ error: "Game not found." });
+        }
+
+        const [achievements] = await pool.execute(
             `
-            
+            SELECT
+                id,
+                achievement_number AS achievementNumber,
+                achievement_text AS achievementText,
+                is_achievement_done AS isAchievementDone
+            FROM achievements
+            WHERE game_id = ?
+            ORDER BY achievement_number;
+            `,
+            [gameId]
+        );
+
+        const [categories] = await pool.execute(
+            `
+            SELECT categories.id, categories.category
+            FROM categories
+            JOIN game_categories
+                ON game_categories.category_id = categories.id
+            WHERE game_categories.game_id = ?
+            ORDER BY categories.category;
+            `,
+            [gameId]
         );
 
         return res.status(200).json({
-            games,
-            totalPages
-        });     
-        
+            game: {
+                ...games[0],
+                categories
+            },
+            achievements, statuses
+        });
     } catch (error) {
         next(error);
     }
-    
-    
 });
 
-//get developer
+app.get("/api/categories/search", async (req, res, next) => {
+    try {
+        const search = String(req.query.q || "").trim();
 
-app.get("/api/titles/developer/:developer", async (req, res) => {
-    const developer = req.params.developer
-    const query = "SELECT title FROM games WHERE developer like ?;"
-    const [games] = await pool.execute(query, [`%${developer}%`])
-    if (games.length === 0) {
-        res.status(404).json({ message: "This developer doesn't exist in the Database!"})
+        if (search.length < 1) {
+            return res.status(200).json([]);
+        }
+
+        const [categories] = await pool.execute(
+            `
+            SELECT id, category
+            FROM categories
+            WHERE category LIKE ?
+            ORDER BY category
+            LIMIT 10;
+            `,
+            [`%${search}%`]
+        );
+
+        return res.status(200).json(categories);
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(games)
-})
+});
 
-// get publisher
+app.post("/api/games", validate, async (req, res, next) => {
+    try {
+        const { title, developer, publisher, launchYear, rating, notes } = req.body;
 
-app.get("/api/titles/publisher/:publisher", async (req, res) => {
-    const publisher = req.params.publisher
-    const query = "SELECT title FROM games WHERE publisher like ?;"
-    const [games] = await pool.execute(query, [`%${publisher}%`])
-    if (games.length === 0) {
-        res.status(404).json({ message: "This publisher doesn't exist in the Database!"})
+
+        const [result] = await pool.execute(
+            `
+            INSERT INTO games
+                (title, developer, publisher, launch_year, rating, notes)
+            VALUES
+                (?, ?, ?, ?, ?, ?)
+            `,
+            [
+                title,
+                developer,
+                publisher,
+                launchYear,
+                rating,
+                notes
+            ]
+        );
+
+        return res.status(201).json({
+            message: "Game created sucessfully.",
+            id: result.insertId
+        });
+
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(games)
-})
+});
 
+// put to toggle favorite in game page
+app.put("/api/games/:id/favorite", async (req, res, next) => {
+    try {
+        const gameId = Number(req.params.id);
+        const { isFavorite } = req.body;
 
+        if (!Number.isInteger(gameId) || gameId < 1) {
+            return res.status(400).json({ error: "Invalid game id." });
+        }
 
-// get title from statuses
+        const validIsFavorite = Boolean(isFavorite);
 
-app.get("/api/titles/status/:status", async (req, res) => {
-    const status = req.params.status
-    const query = "SELECT games.title, statuses.status_name FROM games LEFT JOIN statuses ON statuses.id = games.game_status_id WHERE statuses.status_name like ?;"
-    const [games] = await pool.execute(query, [`%${status}%`])
-    if (games.length === 0) {
-        res.status(404).json({ message: "This status doesn't exist in the Database!"})
+        const [result] = await pool.execute(
+            `
+            UPDATE games
+            SET is_favorite = ?
+            WHERE id = ?;
+            `,
+            [validIsFavorite, gameId]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Game not found." });
+        }
+
+        return res.status(200).json({
+            message: "Favorite updated successfully.",
+            isFavorite: validIsFavorite
+        });
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(games)
-})
+});
 
-// get rating
+// put to edit game base info
 
-app.get("/api/titles/rating", async (req, res) => {
-    const query = "SELECT title FROM games ORDER BY rating DESC;"
-    const [games] = await pool.execute(query)
-    
-    return res.status(200).json(games)
-})
+app.put("/api/games/:id", validate, async (req, res, next) => {
+    try {
+        const gameId = Number(req.params.id);
 
-// get launchYear
+        if (!Number.isInteger(gameId) || gameId < 1) {
+            return res.status(400).json({ error: "Game doesn't exist" });
+        }
 
-app.get("/api/titles/launchYear/:launchYear", async (req, res) => {
-    const launchYear = req.params.launchYear
-    const query = "SELECT title FROM games WHERE launch_year = ?;"
-    const [games] = await pool.execute(query, [`%${launchYear}%`])
-    if (games.length === 0) {
-        res.status(404).json({ message: "This publisher doesn't exist in the Database!"})
+        const { title, developer, publisher, launchYear, rating, notes, statusId, categories } = req.body;
+
+        const [result] = await pool.execute(
+            `
+            UPDATE games
+            SET
+                title = ?,
+                developer = ?,
+                publisher = ?,
+                launch_year = ?,
+                rating = ?,
+                notes = ?,
+                game_status_id = ?
+            WHERE id = ?;
+            `,
+            [
+                title,
+                developer,
+                publisher,
+                launchYear,
+                rating,
+                notes,
+                statusId,
+                gameId
+            ]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Game not found." });
+        }
+
+
+        await pool.execute(
+            "DELETE FROM game_categories WHERE game_id = ?;",
+            [gameId]
+        );
+
+        if (Array.isArray(categories)) {
+            for (const category of categories) {
+                const categoryName = String(category.category || "").trim();
+
+                if (!categoryName) {
+                    continue;
+                }
+
+                let categoryId = category.id;
+
+                if (!categoryId) {
+                    const [existingCategories] = await pool.execute(
+                        "SELECT id FROM categories WHERE category = ?;",
+                        [categoryName]
+                    );
+
+                    if (existingCategories.length > 0) {
+                        categoryId = existingCategories[0].id;
+                    } else {
+                        const [categoryResult] = await pool.execute(
+                            "INSERT INTO categories (category) VALUES (?);",
+                            [categoryName]
+                        );
+
+                        categoryId = categoryResult.insertId;
+                    }
+                }
+
+                await pool.execute(
+                    `
+                    INSERT IGNORE INTO game_categories
+                        (game_id, category_id)
+                    VALUES
+                        (?, ?);
+                    `,
+                    [gameId, categoryId]
+                );
+            }
+        }
+
+        return res.status(200).json({
+            message: "Game updated successfully.",
+            game: {
+                id: gameId,
+                title,
+                developer,
+                publisher,
+                launchYear,
+                rating,
+                notes,
+                statusId,
+                categories
+            }
+        });
+
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(games)
-})
+});
 
-// get full game without extras
 
-app.get("/api/titles/game/:game", async (req, res) => {
-    const game = req.params.game
-    const query = "SELECT games.title, games.developer, games.publisher, games.is_favorite, games.rating, games.notes, games.launch_year, statuses.status_name FROM games JOIN statuses ON statuses.id = games.game_status_id WHERE games.title like ?;"
-    const [games] = await pool.execute(query, [`%${game}%`])
-    if (games.length === 0) {
-        res.status(404).json({ message: "This game doesn't exist in the Database!"})
+app.get("/api/categories/search", async (req, res, next) => {
+    try {
+        const search = String(req.query.q || "").trim();
+
+        const [categories] = await pool.execute(
+            `
+            SELECT id, category
+            FROM categories
+            WHERE ? = '' OR category LIKE ?
+            ORDER BY category
+            LIMIT 10;
+            `,
+            [search, `%${search}%`]
+        );
+
+        return res.status(200).json(categories);
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(games)
-})
+});
 
-// get categories
+// post to add achievements
+app.post("/api/games/:id/achievements", async (req, res, next) => {
+    try {
+        const gameId = Number(req.params.id);
+        const { achievementNumber, achievementText, isAchievementDone } = req.body;
 
-app.get("/api/categories", async (req, res) => {
-    
-    const query = "SELECT categories.category FROM categories;"
-    const [categories] = await pool.execute(query)
-    if (categories.length === 0) {
-        res.status(404).json({ message: "There are no categories in the Database!"})
+        if (!Number.isInteger(gameId) || gameId < 1) {
+            return res.status(400).json({ error: "Invalid game id." });
+        }
+
+        const validAchievementNumber = Number(achievementNumber);
+        const validAchievementText = String(achievementText || "").trim();
+        const validIsAchievementDone = Boolean(isAchievementDone);
+
+        if (!Number.isInteger(validAchievementNumber) || validAchievementNumber < 1) {
+            return res.status(400).json({ error: "Invalid achievement number." });
+        }
+
+        if (validAchievementText.length < 1) {
+            return res.status(400).json({ error: "Achievement text is required." });
+        }
+
+        const [existingAchievement] = await pool.execute(
+            `
+            SELECT id
+            FROM achievements
+            WHERE game_id = ? AND achievement_number = ?;
+            `,
+            [gameId, validAchievementNumber]
+        );
+
+        if (existingAchievement.length > 0) {
+            return res.status(400).json({
+                error: "This achievement number already exists for this game."
+            });
+        }
+
+        const [result] = await pool.execute(
+            `
+            INSERT INTO achievements
+                (game_id, achievement_number, achievement_text, is_achievement_done)
+            VALUES
+                (?, ?, ?, ?);
+            `,
+            [
+                gameId,
+                validAchievementNumber,
+                validAchievementText,
+                validIsAchievementDone
+            ]
+        );
+
+        return res.status(201).json({
+            id: result.insertId,
+            achievementNumber: validAchievementNumber,
+            achievementText: validAchievementText,
+            isAchievementDone: validIsAchievementDone
+        });
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(categories)
-})
+});
 
-// get titles by categories
 
-app.get("/api/titles/categories/:category", async (req, res) => {
-    const category = req.params.category
-    const query = "SELECT games.title, categories.category FROM games JOIN game_categories ON game_categories.game_id = games.id JOIN categories ON game_categories.category_id = categories.id WHERE categories.category like ?;"
-    const [games] = await pool.execute(query, [`%${category}%`])
-    if (games.length === 0) {
-        res.status(404).json({ message: "This game doesn't exist in the Database!"})
+// put to edit achievements
+app.put("/api/achievements/:id", async (req, res, next) => {
+    try {
+        const achievementId = Number(req.params.id);
+        const { achievementNumber, achievementText, isAchievementDone } = req.body;
+
+        if (!Number.isInteger(achievementId) || achievementId < 1) {
+            return res.status(400).json({ error: "Invalid achievement id." });
+        }
+
+        const validAchievementNumber = Number(achievementNumber);
+        const validAchievementText = String(achievementText || "").trim();
+        const validIsAchievementDone = Boolean(isAchievementDone);
+
+        if (!Number.isInteger(validAchievementNumber) || validAchievementNumber < 1) {
+            return res.status(400).json({ error: "Invalid achievement number." });
+        }
+
+        if (validAchievementText.length < 1) {
+            return res.status(400).json({ error: "Achievement text is required." });
+        }
+
+        const [result] = await pool.execute(
+            `
+            UPDATE achievements
+            SET
+                achievement_number = ?,
+                achievement_text = ?,
+                is_achievement_done = ?
+            WHERE id = ?;
+            `,
+            [
+
+                validAchievementNumber,
+                validAchievementText,
+                validIsAchievementDone,
+                achievementId
+            ]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Achievement not found." });
+        }
+
+        return res.status(200).json({ message: "Achievement updated successfully." });
+    } catch (error) {
+        next(error);
     }
-    return res.status(200).json(games)
-})
+});
 
+// delete an achievement
+app.delete("/api/achievements/:id", async (req, res, next) => {
+    try {
+        const achievementId = Number(req.params.id);
 
+        if (!Number.isInteger(achievementId) || achievementId < 1) {
+            return res.status(400).json({ error: "Invalid achievement id." });
+        }
 
+        const [result] = await pool.execute(
+            "DELETE FROM achievements WHERE id = ?;",
+            [achievementId]
+        );
 
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Achievement not found." });
+        }
 
-// get achievements from title and completion rate
+        return res.status(200).json({
+            message: "Achievement deleted successfully."
+        });
+    } catch (error) {
+        next(error);
+    }
+});
 
-// get the first 30 titles and their achievements completion ordered by the DB and be able to skips 30 for pages
+// delete the game on the game page
+app.delete("/api/games/:id", async (req, res, next) => {
+    try {
+        const gameId = Number(req.params.id);
 
-// post title, developer, publisher, rating, notes, launch year
+        if (!Number.isInteger(gameId) || gameId < 1) {
+            return res.status(400).json({ error: "This game doesn't exist." });
+        }
 
-// put link categories to specific game
+        const [result] = await pool.execute(
+            "DELETE FROM games WHERE id = ?;",
+            [gameId]
+        );
 
-// put change game with title, developer, publisher, favorite, rating, notes, launch year, status
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Game not found." });
+        }
 
-// put favorite of a game
+        return res.status(200).json({ message: "Game deleted successfully." });
+    } catch (error) {
+        next(error);
+    }
+});
 
-// put status on a game
-
-// delete game from title
-
-// delete achievements from title
 
 
 app.use((error, req, res, next) => {
